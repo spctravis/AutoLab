@@ -1,0 +1,31 @@
+#Set vEthernet to Private so you can get through firewall
+function Enter-LabSession {
+
+if ((Get-NetConnectionProfile -InterfaceAlias vEthernet*).NetworkCategory -ne "Private") {
+    Set-NetConnectionProfile -InterfaceAlias vEthernet* -NetworkCategory Private
+}
+
+if(get-lab) {
+$labIpV4Address = (Get-LabVM).IpV4Address
+} else {
+import-lab -Name Test5
+$labIpV4Address = (Get-LabVM).IpV4Address
+}
+
+if (!$cred) {
+$cred = Get-Credential -UserName 'Badger' -Message "Enter Password"}
+
+Get-PSSession | Where-Object state -ne 'opened' | Remove-PSSession
+
+$LABPSSession = Get-PSSession
+
+$labIpV4Address | ForEach-Object { if ($LABPSSession.computername -notcontains $_) {
+
+New-PSSession -ComputerName $_ -Credential $cred 
+    }#End IF
+} #End Foreach
+$LABPSSession = Get-PSSession
+
+} # End Function
+
+Enter-LabSession
