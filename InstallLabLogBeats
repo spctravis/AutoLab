@@ -1,0 +1,51 @@
+
+$PSSession = Get-PSSession
+$HomeIPv4Address = (Get-NetIPAddress -InterfaceAlias vEthernet* -AddressFamily IPv4).IPAddress 
+$HomeIPv4Address = $HomeIPv4Address[0]
+Invoke-Command -Session $PSSession -ArgumentList $HomeIPv4Address -ScriptBlock {
+
+#check if there is a new folder for winlogbeats if not creates it
+if (!(test-path $($env:ProgramFiles + '\winlogbeats'))) {
+    New-Item -ItemType Directory -Path $env:ProgramFiles -Name 'winlogbeats'
+    } #end if
+$newbeatsDir = $env:ProgramFiles + '\winlogbeats'
+#if(!(Test-Path $newbeatsDir + '\winlogbeats.exe') {
+#Move-Item -Path 
+#}
+
+#check to see if winlogbeats is in the correct folder made above
+$beats = Get-ChildItem -Filter *winlogbeat* -Attributes !d -Path / -Recurse
+if ($beats.DirectoryName -notlike "*ProgramFiles*") {
+Move-Item ($beats.DirectoryName + '\fields.yml') -Destination $newbeatsDir -ErrorAction SilentlyContinue
+$beats.fullname | ForEach-Object {Move-Item $_ -Destination $newbeatsDir}
+    }#end if
+
+
+#$ymlfilePath = Get-ChildItem -Path \ -Recurse -Filter winlogbeat.yml  | Where-Object Fullname -NotLike "*SoftwarePackages*"
+
+$ymlfile = $newbeatsDir + '\winlogbeat.yml' | Get-Content 
+
+$pattern =   'hosts\: \[\"localhost\:9200\"\]'
+
+$newpattern = 'hosts: ["' + $Using:HomeIPv4Address + ':9200"]'
+
+$ymlfile = $ymlfile | ForEach-Object { $_ -replace $pattern, $newpattern}
+$ymlfile | Out-File -Encoding ascii -FilePath $(($ymlfilePath).directoryname + "\winlogbeat.yml") -Force
+
+
+$workdir = (Get-ChildItem -Path \ -Recurse -Filter winlogbeat.exe).directoryname
+
+# Create the new service.
+New-Service -name winlogbeat `
+  -displayName Winlogbeat `
+  -binaryPathName "`"$workdir\winlogbeat.exe`" -c `"$workdir\winlogbeat.yml`" -path.home `"$workdir`" -path.data `"C:\ProgramData\winlogbeat`" -path.logs `"C:\ProgramData\winlogbeat\logs`""
+
+# Attempt to set the service to delayed start using sc config.
+Try {
+  Start-Process -FilePath sc.exe -ArgumentList 'config winlogbeat start=delayed-auto'
+}
+Catch { Write-Host "An error occured setting the service to delayed start." -ForegroundColor Red }
+
+}
+
+Get-Service -DisplayName winlogbeat | Start-Service
