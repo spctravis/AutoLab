@@ -1,0 +1,8 @@
+$PSSession = Get-PSSession
+$HomeIPv4Address = (Get-NetIPAddress -InterfaceAlias vEthernet* -AddressFamily IPv4).IPAddress 
+$HomeIPv4Address = $HomeIPv4Address[0]
+Invoke-Command -Session $PSSession -ArgumentList $HomeIPv4Address -ScriptBlock {
+
+Get-Service -DisplayName winlogbeat | Start-Service -Verbose
+
+}
